@@ -65,13 +65,13 @@ def metric_box(
     ax = ax or plt.gca()
     if type == "box":
         sns.boxplot(
-            data=df, x=x, y=metric, order=order, hue=hue, 
+            data=df, x=x, y=metric, order=order, hue=x, 
             ax=ax, width=0.5, palette=palette, showfliers=False
         )
     else: # bar
         sns.barplot(
-            data=df, x=x, y=metric, order=order, hue=hue,
-            ax=ax, palette=palette, ci='sd'
+            data=df, x=x, y=metric, order=order, hue=x,
+            ax=ax, palette=palette, errorbar='sd'
         )
     ax.set_xlabel("")
     ax.set_ylabel(metric)
@@ -132,7 +132,7 @@ def metric_grid(
 def plot_confidence(
     ts: np.ndarray,
     c: np.ndarray,
-    y: int,
+    y: Union[int, Sequence[int]],
     tp: int, fp: int, tn: int, fn: int,
     *,
     high_conf: Optional[Sequence[int]] = None,
@@ -203,8 +203,16 @@ def plot_confidence(
             ax.axvspan(h, h + width, color="0.8", alpha=0.4, zorder=0)
 
     # Draw Ground Truth Line
-    if y != -1:
-        ax.axvline(x=y, color="red", linestyle="--", linewidth=1.5, label="Event Onset", zorder=3)
+    # Normalize y to list
+    if isinstance(y, int):
+        events = [] if y == -1 else [y]
+    else:
+        events = [e for e in y if e != -1]
+
+    # Plot lines
+    for i, event_idx in enumerate(events):
+        label = "Event Onset" if i == 0 else None # Only label first line for legend
+        ax.axvline(x=event_idx, color="red", linestyle="--", linewidth=1.5, label=label, zorder=3)
 
     # --- Right Axis: Colorbar ---
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)

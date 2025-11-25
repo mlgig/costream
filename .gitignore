@@ -1,0 +1,9 @@
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+.DS_Store
+.vscode/
+*.csv
+*.xlsx
+*.xls
+data/falls/
+temp_demo_data/

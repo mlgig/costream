@@ -85,26 +85,12 @@ print(results[['model', 'f1-score', 'gain', 'delay', 'false alarm rate']])
 
 ## 📁 Modules
 
-  -------------------------------------------------------------------------
-  Module                      Description
-  --------------------------- ---------------------------------------------
-  `costream.data`             Loaders for CSV/Feather data and subject
-                              grouping.
-
-  `costream.segmentation`     `training_segmenter`: Creates (X, y)
-                              windows.`<br>`{=html}`streaming_segmenter`:
-                              Sliding-window inference engine.
-
-  `costream.model`            `CostClassifierCV`: Core
-                              estimator.`<br>`{=html}`metrics`: Cost
-                              functions and gain calculations.
-
-  `costream.evaluation`       `tester`: Experiment
-                              runner.`<br>`{=html}`event_detection`:
-                              Converts probabilities to discrete
-                              events.`<br>`{=html}`visualization`: Plots
-                              confidence maps and metrics.
-  -------------------------------------------------------------------------
+| Module | Description |
+| :--- | :--- |
+| **`costream.data`** | Loaders for CSV/Feather data and subject grouping (`loader.py`). |
+| **`costream.segmentation`** | `training_segmenter.py`: Extracts labeled windows (X, y) for training.<br>`streaming_segmenter.py`: Sliding window engine for real-time inference. |
+| **`costream.model`** | `cost_classifier_cv.py`: The core cost-sensitive ensemble estimator.<br>`metrics.py`: Custom cost functions and gain calculations. |
+| **`costream.evaluation`** | `tester.py`: End-to-end experiment runner.<br>`event_detection.py`: Converts continuous probabilities into discrete events.<br>`visualization.py`: Plots confidence maps and performance metrics. |
 
 ------------------------------------------------------------------------
 
@@ -140,7 +126,7 @@ If you use **Costream** in your research, please cite:
 }
 ```
 
-*(A Software Impacts citation will be added once published.)*
+*(Citation will be updated once published.)*
 
 ------------------------------------------------------------------------
 

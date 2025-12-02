@@ -48,7 +48,7 @@ def evaluate_recording(
     confidence_signal: np.ndarray,
     confidence_thresh: float = 0.5,
     window_size: float = 7.0,
-    tolerance: float = 2.0,
+    tolerance: float = 20,
     freq: int = 100,
     step: float = 1.0,
     debounce_secs: float = 60.0

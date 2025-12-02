@@ -37,14 +37,14 @@ def run_experiment(
     X_train: np.ndarray,
     y_train: np.ndarray,
     test_signals: Sequence[np.ndarray],
-    test_event_points: Sequence[Union[int, Sequence[int]]],  # <--- UPDATED TYPE
+    test_event_points: Sequence[Union[int, Sequence[int]]],
     model_specs: List[ModelSpec],
     *,
     window_size: float = 7.0,
     step: float = 1.0,
     freq: int = 100,
-    signal_thresh: float = 1.04,
-    tolerance: float = 2.0,
+    signal_thresh: float = 0.0,
+    tolerance: float = 20,
     debounce_secs: float = 60.0,
     ensemble_all: bool = False,
     verbose: bool = True

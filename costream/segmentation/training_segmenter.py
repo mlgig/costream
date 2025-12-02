@@ -4,7 +4,7 @@ Segmentation logic for creating training datasets from continuous signals.
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Iterable, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -14,9 +14,7 @@ __all__ = ["create_training_data"]
 
 
 def _window_view(arr: np.ndarray, win: int, step: int) -> np.ndarray:
-    """
-    Return a sliding window view of an array.
-    """
+    """Return a sliding window view of an array."""
     arr = np.asarray(arr)
     
     if len(arr) < win:
@@ -25,14 +23,10 @@ def _window_view(arr: np.ndarray, win: int, step: int) -> np.ndarray:
         else:
             return np.empty((0, win, arr.shape[1]), dtype=arr.dtype)
             
-    # Input: (Time, Feats) -> Output: (N_windows, Feats, Win_size)
     if arr.ndim == 1:
-        # (N, Win)
         return sliding_window_view(arr, win, axis=0)[::step]
     else:
-        # (Time, Feats) -> (N, Feats, Win)
         v = sliding_window_view(arr, win, axis=0)[::step]
-        # Transpose to (N, Win, Feats)
         return v.transpose(0, 2, 1)
 
 
@@ -44,67 +38,30 @@ def create_training_data(
     freq: int = 100,
     window_size: float = 7.0,
     step: float = 1.0,
-    activity_threshold: float = 1.1,
+    signal_thresh: float = 0.0,
     drop_below_threshold: bool = True,
     spacing: Union[int, str] = 1,
     event_pos: str = "fixed",
     keep_unsegmented: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Generate (X, y) training pairs from a list of signal DataFrames.
-
-    Parameters
-    ----------
-    dfs : Iterable[pd.DataFrame]
-        List of dataframes (one per recording).
-    feature_cols : Sequence[str]
-        List of columns to use as features.
-    label_col : str, default="label"
-        Name of the label column. Assumes 0 is background, >0 is event.
-    freq : int, default=100
-        Sampling rate in Hz.
-    window_size : float, default=7.0
-        Window size in seconds.
-    step : float, default=1.0
-        Step size for sliding window in seconds (for negative class).
-    activity_threshold : float, default=1.1
-        Threshold value for filtering ADL (negative) windows.
-    drop_below_threshold : bool, default=True
-        - True: Discard windows where max(signal) < threshold (Keep active).
-        - False: Discard windows where max(signal) >= threshold (Keep quiet).
-    spacing : int, "na" or "multiphase", default=1
-        - "na": Center the event in the window.
-        - "multiphase": Special mode. Positive offset is fixed at 1s. 
-           Negative windows are filtered based on the 2nd second of data.
-        - int: Generate multiple positive windows with this spacing.
-    event_pos : str, default="fixed"
-        "fixed" or "random" offsets for positive window generation.
-    keep_unsegmented : bool, default=False
-        If True, returns the full raw signals (ragged array) and event index.
-
-    Returns
-    -------
-    X : np.ndarray
-        Shape (N_samples, Window_Len_Samples, N_features) or (N, Win).
-    y : np.ndarray
-        Shape (N_samples,). 0 for ADL, 1 for Event.
+    Generate (X, y) pairs. Supports MULTIPLE events per file.
     """
     
     win_len_samples = int(window_size * freq)
     step_samples = int(step * freq)
 
-    # --- 1. Setup Positive Window Offsets ---
-    if spacing == "na":
-        # Center the fall in the window
+    # --- Setup Positive Window Offsets ---
+    
+    if str(spacing) == "na":
         pre_offsets = [int(window_size // 2)]
-        
-    elif spacing == "multiphase":
-        # Special Mode: Exactly 1 second before the fall
-        # Adapted from original script: pre_offsets = [1]
+    
+    elif str(spacing) == "multiphase":
+        # Specific mode: Window starts exactly 1 second before the event
         pre_offsets = [1]
         
     else:
-        # Standard spacing logic
+        # Integer spacing logic
         s = int(spacing)
         margin = 2 if window_size >= 4.0 else 0
         start_range = margin
@@ -120,9 +77,7 @@ def create_training_data(
             if end_range <= start_range:
                 pre_offsets = [int(window_size // 2)]
             else:
-                pre_offsets = list(range(start_range, end_range, s))
-                if not pre_offsets:
-                    pre_offsets = [int(window_size // 2)]
+                pre_offsets = list(range(start_range, end_range, s)) or [int(window_size // 2)]
 
     X_rows, y_rows = [], []
 
@@ -132,21 +87,40 @@ def create_training_data(
         if signal.shape[1] == 1:
             signal = signal.flatten()
 
-        labels = df[label_col].to_numpy()
-        event_indices = np.flatnonzero(labels)
-        event_index = event_indices[0] if event_indices.size > 0 else -1
+        labels = df[label_col].to_numpy(dtype=int)
+        
+        # --- Find All Distinct Events (0 -> Non-Zero Transitions) ---
+        # Padding ensures we catch an event if it starts at index 0
+        padded_labels = np.pad(labels, (1, 0), mode='constant', constant_values=0)
+        event_indices = np.where((padded_labels[:-1] == 0) & (padded_labels[1:] != 0))[0]
 
         # -- Unsegmented Mode --
         if keep_unsegmented:
             X_rows.append(signal)
-            y_rows.append(event_index)
+            if len(event_indices) == 0:
+                y_rows.append(-1)
+            else:
+                # if multiple events exist, return list, else single
+                y_rows.append(event_indices if len(event_indices) > 1 else event_indices[0])
             continue
 
         win_list = []
         y_list = []
 
-        # --- 2. Positive Windows ---
-        if event_index >= 0:
+        # Create mask for "dirty" regions (Event + Pre-offset coverage)
+        # Any negative window touching this mask will be discarded.
+        event_mask = np.zeros(len(signal), dtype=bool)
+
+        # --- Positive Windows (Iterate over ALL events) ---
+        for event_index in event_indices:
+            
+            # Mark the region around this event as "Dirty"
+            max_offset = max(pre_offsets) if pre_offsets else 0
+            safe_start = max(0, event_index - int(max_offset * freq))
+            safe_end = min(len(signal), event_index + win_len_samples)
+            event_mask[safe_start:safe_end] = True
+
+            # Extract Positive Windows
             for pre in pre_offsets:
                 offset_samples = int(pre * freq)
                 start = max(0, event_index - offset_samples)
@@ -156,35 +130,32 @@ def create_training_data(
                     event_win = signal[start:end]
                     win_list.append(event_win)
                     y_list.append(1)
-            
-            # Negatives come from before the event
-            max_offset = max(pre_offsets) if pre_offsets else 0
-            max_offset_samples = int(max_offset * freq)
-            cut_left = max(0, event_index - max_offset_samples)
-            signal_neg = signal[:cut_left]
-        else:
-            signal_neg = signal
 
-        # --- 3. Negative Windows ---
-        if len(signal_neg) >= win_len_samples:
-            view = _window_view(signal_neg, win_len_samples, step_samples)
+        # --- Negative Windows ---
+        if len(signal) >= win_len_samples:
+            
+            # Generate ALL sliding windows
+            all_windows = _window_view(signal, win_len_samples, step_samples)
+            
+            # Generate corresponding mask windows
+            mask_windows = _window_view(event_mask, win_len_samples, step_samples)
+            
+            # Filter: Keep windows where mask is entirely False (Pure ADL)
+            is_pure_adl = ~np.any(mask_windows, axis=1)
+            view = all_windows[is_pure_adl]
             
             if view.size > 0:
                 # --- Filtering Logic ---
-                # Check max value. If "multiphase", check only the 2nd second (freq to 2*freq).
-                
                 target_view = view
                 
-                if spacing == "multiphase":
-                    # Check if window is long enough (at least 2 seconds)
+                # for "multiphase": check 2nd second only
+                if str(spacing) == "multiphase":
                     if view.shape[1] >= 2 * freq:
                         if view.ndim == 2:
-                             # (N, Win) -> Slice columns
-                            target_view = view[:, freq : 2 * freq]
+                             target_view = view[:, freq : 2 * freq]
                         else:
-                            # (N, Win, Feats) -> Slice time dimension (axis 1)
                             target_view = view[:, freq : 2 * freq, :]
-                
+
                 # Calculate Max
                 if target_view.ndim == 2:
                     max_vals = np.max(np.abs(target_view), axis=1)
@@ -193,10 +164,9 @@ def create_training_data(
                 
                 # Apply Threshold
                 if drop_below_threshold:
-                    # Original logic: mask = main.max() >= thresh
-                    mask = max_vals >= activity_threshold
+                    mask = max_vals >= signal_thresh
                 else:
-                    mask = max_vals < activity_threshold
+                    mask = max_vals < signal_thresh
                 
                 clean_negatives = view[mask]
                 
@@ -218,15 +188,12 @@ def create_training_data(
 
     # -- Final Return --
     if keep_unsegmented:
-        return np.array(X_rows, dtype=object), np.array(y_rows, dtype=int)
+        return np.array(X_rows, dtype=object), np.array(y_rows, dtype=object)
 
     if not X_rows:
-        if len(feature_cols) == 1:
-             return np.empty((0, win_len_samples), np.float32), np.empty((0,), np.uint8)
-        else:
-             return np.empty((0, win_len_samples, len(feature_cols)), np.float32), np.empty((0,), np.uint8)
+        shape = (0, win_len_samples) if len(feature_cols) == 1 else (0, win_len_samples, len(feature_cols))
+        return np.empty(shape, np.float32), np.empty((0,), np.uint8)
 
     X = np.vstack(X_rows)
     y = np.concatenate(y_rows)
-    
     return X, y

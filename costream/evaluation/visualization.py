@@ -16,6 +16,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.axes import Axes
 from matplotlib.lines import Line2D
+from sklearn.metrics import ConfusionMatrixDisplay
 
 # Optional dependency for Critical Difference diagrams
 try:
@@ -36,6 +37,8 @@ __all__ = [
     "save_confusion_matrix",
     "plot_grouped_stacked",
     "window_bar",
+    "plot_cm_comparison",
+    "plot_threshold_curve",
 ]
 
 
@@ -47,6 +50,105 @@ def set_style(style: str = "ticks", font_scale: float = 1.1):
 # Set default style on import
 set_style()
 
+def plot_cm_comparison(
+    cm_untuned: np.ndarray,
+    cm_tuned: np.ndarray,
+    labels: List[str] = ["Fall", "ADL"],
+    title_untuned: str = r"Untuned ($\tau$=0.50)",
+    title_tuned: str = r"Tuned ($\tau$=opt)",
+    save_path: Optional[str] = None,
+    cm_order: List[str] = ["tp", "fn", "fp", "tn"],
+):
+    """
+    Plot two confusion matrices side-by-side (Untuned vs Tuned).
+    """
+    fig, axs = plt.subplots(1, 2, figsize=(5, 2), dpi=400, sharey=True)
+
+    if cm_order == ["tp", "fn", "fp", "tn"]:
+        def reorder_cm(cm: np.ndarray) -> np.ndarray:
+            return np.array([[cm[1, 1], cm[1, 0]], [cm[0, 1], cm[0, 0]]])
+        cm_untuned = reorder_cm(cm_untuned)
+        cm_tuned = reorder_cm(cm_tuned)
+    
+    # Plot Untuned
+    ConfusionMatrixDisplay(cm_untuned, display_labels=labels).plot(
+        ax=axs[0], colorbar=False, values_format="d"
+    )
+    axs[0].set_title(title_untuned, fontsize=10)
+    
+    # Plot Tuned
+    ConfusionMatrixDisplay(cm_tuned, display_labels=labels).plot(
+        ax=axs[1], colorbar=False, values_format="d"
+    )
+    axs[1].set_title(title_tuned, fontsize=10)
+    
+    # Shared Labels
+    for ax in axs:
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.grid(False)
+        
+    fig.supxlabel("Predicted", y=-0.12, fontsize=11)
+    fig.supylabel("Actual", x=0.001, fontsize=11)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+    plt.show()
+
+
+def plot_threshold_curve(
+    model: Any, 
+    save_path: Optional[str] = None
+):
+    """
+    Plot the Cost/Gain vs. Threshold curve for a fitted CostClassifierCV.
+    Adapted to match sklearn's TunedThresholdClassifierCV style.
+    """
+    # Check if we have the curve stored
+    if not hasattr(model, "optimization_curve_"):
+        print("Model missing 'optimization_curve_'. Ensure it is a fitted CostClassifierCV.")
+        return
+
+    taus, scores = model.optimization_curve_
+    best_tau = model.threshold_
+    
+    # Find score at best tau
+    best_score_idx = np.abs(taus - best_tau).argmin()
+    best_score = scores[best_score_idx]
+
+    plt.figure(figsize=(6, 5), dpi=400)
+
+    # Plot Curve
+    # Divide by 100 to match your scaling preference in the snippet, 
+    # or keep raw if score is already scaled. Assuming raw gain here.
+    # If you want "gain * 10^-2", we scale:
+    scale_factor = 100.0
+    
+    plt.plot(
+        taus,
+        scores / scale_factor,
+        color="tab:orange",
+        lw=2
+    )
+    
+    # Plot Optimal Point
+    plt.plot(
+        best_tau,
+        best_score / scale_factor,
+        "o",
+        markersize=10,
+        color="tab:orange",
+        label="Optimal cut-off point",
+    )
+    
+    plt.legend()
+    plt.xlabel("Decision threshold")
+    plt.ylabel(r"gain $\times 10^{-2}$")
+    plt.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight")
+    plt.show()
 
 def metric_box(
     df: pd.DataFrame,
@@ -552,7 +654,7 @@ def window_bar(
     hue: str = "model",
     *,
     order: Sequence[int] | None = None,
-    ci: str | float | None = "sd",
+    errorbar = "sd",
     palette: str | Sequence[str] = "tab10",
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -576,11 +678,11 @@ def window_bar(
         y=metric,
         hue=hue,
         order=order,
-        ci=ci,
+        errorbar=errorbar,
         palette=palette,
         capsize=0.12,
         ax=ax,
-        errwidth=1,
+        err_kws={'linewidth': 1},
     )
     ax.set_xlabel("Window size (s)")
     ax.set_ylabel(metric)

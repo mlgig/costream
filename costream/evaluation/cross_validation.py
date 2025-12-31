@@ -30,7 +30,8 @@ def run_subject_cv(
     freq: int = 100,
     activity_threshold: float = 1.4,
     drop_below_threshold: bool = True,
-    spacing: Union[int, str] = 1,
+    spacing: Union[int, str] = 5,
+    use_post_event_data: bool = True,
     # Streaming/Eval Params
     tolerance: float = 20,
     debounce_secs: float = 60.0,
@@ -87,9 +88,8 @@ def run_subject_cv(
         test_subjs = subjects[test_idx]
 
         if verbose:
-            print(f"\n=== Fold {fold_idx}/{cv} ===")
             print(
-                f"  Train Subjects: {len(train_subjs)} | Test Subjects: {len(test_subjs)}"
+                f"\n=== Fold {fold_idx}/{cv} | Train Subjects: {len(train_subjs)} | Test Subjects: {len(test_subjs)} ==="
             )
 
         # 1. Prepare Training Data (Segmented)
@@ -108,6 +108,8 @@ def run_subject_cv(
             signal_thresh=activity_threshold,
             drop_below_threshold=drop_below_threshold,
             spacing=spacing,
+            event_exclusion_margin=0.0,
+            use_post_event_data=use_post_event_data,
         )
 
         if verbose:

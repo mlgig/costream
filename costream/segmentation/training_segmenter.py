@@ -40,9 +40,11 @@ def create_training_data(
     step: float = 1.0,
     signal_thresh: float = 0.0,
     drop_below_threshold: bool = True,
-    spacing: Union[int, str] = 1,
+    spacing: Union[int, str] = 5,
     event_pos: str = "fixed",
     keep_unsegmented: bool = False,
+    event_exclusion_margin: float = 0.0,
+    use_post_event_data: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate (X, y) pairs. Supports MULTIPLE events per file.
@@ -50,6 +52,7 @@ def create_training_data(
     
     win_len_samples = int(window_size * freq)
     step_samples = int(step * freq)
+    margin_samples = int(event_exclusion_margin * freq) # Convert margin to samples
 
     # --- Setup Positive Window Offsets ---
     
@@ -108,19 +111,33 @@ def create_training_data(
         y_list = []
 
         # Create mask for "dirty" regions (Event + Pre-offset coverage)
-        # Any negative window touching this mask will be discarded.
         event_mask = np.zeros(len(signal), dtype=bool)
 
         # --- Positive Windows (Iterate over ALL events) ---
-        for event_index in event_indices:
+        for i, event_index in enumerate(event_indices):
             
             # Mark the region around this event as "Dirty"
             max_offset = max(pre_offsets) if pre_offsets else 0
-            safe_start = max(0, event_index - int(max_offset * freq))
-            safe_end = min(len(signal), event_index + win_len_samples)
-            event_mask[safe_start:safe_end] = True
+            
+            # Start of dirty region = Event - MaxOffset - Margin
+            safe_start = max(0, event_index - int(max_offset * freq) - margin_samples)
+            
+            if not use_post_event_data:
+                # Mask EVERYTHING from the start of the first event buffer to the end
+                # effectively discarding post-fall ADL
+                event_mask[safe_start:] = True
+                
+                # If we are discarding post-data, we only process the FIRST event
+                # (because subsequent events are in the discarded zone)
+                if i > 0: 
+                    break 
+            else:
+                # Standard: Mask the specific event window + margin
+                safe_end = min(len(signal), event_index + win_len_samples + margin_samples)
+                event_mask[safe_start:safe_end] = True
 
             # Extract Positive Windows
+            # (We always extract positives for the current event, unless skipped above)
             for pre in pre_offsets:
                 offset_samples = int(pre * freq)
                 start = max(0, event_index - offset_samples)
@@ -130,6 +147,10 @@ def create_training_data(
                     event_win = signal[start:end]
                     win_list.append(event_win)
                     y_list.append(1)
+            
+            # If discarding post-data, we stop finding events after the first one
+            if not use_post_event_data:
+                break
 
         # --- Negative Windows ---
         if len(signal) >= win_len_samples:

@@ -30,9 +30,7 @@ cost-sensitive training, and realistic replay-based evaluation.
 Clone and install from source:
 
 ``` bash
-git clone https://github.com/timiderinola/costream
-cd costream
-pip install -e .
+pip install pip install git+https://github.com/mlgig/costream.git
 ```
 
 **Requirements**\

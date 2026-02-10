@@ -23,7 +23,7 @@ def generate_sliding_windows(
     window_size: float = 7.0,
     step: float = 1.0,
     freq: int = 100,
-    signal_thresh: float = 1.04,
+    signal_thresh: float = 0.0,
     pad: bool = False
 ) -> Tuple[np.ndarray, List[Tuple[int, int]], np.ndarray, int]:
     """
@@ -170,7 +170,7 @@ def sliding_window_inference(
     window_size: float = 7.0,
     step: float = 1.0,
     freq: int = 100,
-    signal_thresh: float = 1.04,
+    signal_thresh: float = 0.0,
     method: Literal['max', 'mean'] = 'max',
     pad: bool = False,
     const_confidence: Optional[float] = None

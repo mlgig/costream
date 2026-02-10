@@ -135,8 +135,12 @@ def compute_metrics_from_cm(
     """
     tn, fp, fn, tp = cm.ravel()
     out = {
+        "tp": int(tp),
+        "fp": int(fp),
+        "tn": int(tn),
+        "fn": int(fn),
         "runtime": runtime,
-        "delay":   delay,
+        "delay": delay,
     }
     for m in REGISTRY.values():
         # Pass individual counts plus all kwargs

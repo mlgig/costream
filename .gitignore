@@ -2,10 +2,14 @@
 */.ipynb_checkpoints/*
 .DS_Store
 .vscode/
-*.csv
 *.xlsx
 *.xls
 data/falls/
 temp_demo_data/
 test_components.py
 examples/fall_detection
+*.dat
+*.txt
+.pytest_cache
+costream.egg-info
+tests

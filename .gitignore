@@ -7,6 +7,11 @@
 data/falls/
 temp_demo_data/
 test_components.py
-examples/fall_detection/data
+examples/fall_detection
+examples/demo_ecg_anomaly.ipynb
+examples/demo_kdd_tsad_135.ipynb
 *.dat
 *.txt
+.pytest_cache
+costream.egg-info
+tests

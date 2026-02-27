@@ -26,44 +26,16 @@ def generate_sliding_windows(
     signal_thresh: float = 0.0,
     pad: bool = False
 ) -> Tuple[np.ndarray, List[Tuple[int, int]], np.ndarray, int]:
-    """
-    Generate sliding windows from time series with optional activity filtering.
-
-    Parameters
-    ----------
-    ts : np.ndarray
-        Input time series data (typically magnitude).
-    window_size : float, default=7.0
-        Window size in seconds.
-    step : float, default=1.0
-        Step size in seconds.
-    freq : int, default=100
-        Sampling frequency in Hz.
-    signal_thresh : float, default=1.04
-        Minimum signal threshold (max value in window) to be considered valid.
-        Windows below this threshold are marked invalid in the mask.
-    pad : bool, default=False
-        Whether to pad the time series to fit complete windows at the end.
-
-    Returns
-    -------
-    windows : np.ndarray
-        Array of shape (n_windows, window_size_samples).
-    indices : list of tuple
-        List of (start, end) indices for each window.
-    valid_mask : np.ndarray
-        Boolean array indicating which windows passed the signal_thresh.
-    pad_size : int
-        Number of samples added as padding.
-    """
+    
     ts = np.asarray(ts, dtype=np.float32)
     n = len(ts)
     step_samples = int(step * freq)
     window_samples = int(window_size * freq)
 
-    # Handle empty or too-short time series
+    # Handle empty/short series 
     if n < window_samples:
-        return np.empty((0, window_samples), dtype=ts.dtype), [], np.array([], dtype=bool), 0
+        empty_shape = (0, window_samples) if ts.ndim == 1 else (0, window_samples, ts.shape[1])
+        return np.empty(empty_shape, dtype=ts.dtype),[], np.array([], dtype=bool), 0
 
     # Padding
     pad_size = 0
@@ -71,27 +43,32 @@ def generate_sliding_windows(
         remainder = (n - window_samples) % step_samples
         if remainder != 0:
             pad_size = step_samples - remainder
-            ts = np.pad(ts, (0, pad_size), mode='constant', constant_values=0)
+            pad_width = (0, pad_size) if ts.ndim == 1 else ((0, pad_size), (0, 0))
+            ts = np.pad(ts, pad_width, mode='constant', constant_values=0)
             n = len(ts)
 
-    # Use sliding_window_view for efficient memory views (no copy)
-    # Shape: (n_windows_total, window_samples)
-    all_windows = sliding_window_view(ts, window_samples)[::step_samples]
+    # Sliding Window View
+    if ts.ndim == 1:
+        all_windows = sliding_window_view(ts, window_samples)[::step_samples]
+    else:
+        # Slide ONLY along the time axis (axis=0)
+        all_windows = sliding_window_view(ts, window_samples, axis=0)[::step_samples]
+        # Swap axes to match standard (N_windows, Window_Length, Channels)
+        all_windows = all_windows.transpose(0, 2, 1)
     
-    # Generate indices
-    # We iterate based on the number of windows generated
     n_wins = all_windows.shape[0]
     starts = np.arange(0, n_wins * step_samples, step_samples)
     ends = starts + window_samples
     indices = list(zip(starts, ends))
 
-    # Vectorized threshold check
-    # Check max value in each window to filter out sedentary/noise periods
+    # 4. Vectorized Threshold Check (Now supports 3D max pooling)
     if all_windows.ndim == 1:
-        # Should not happen if window_samples > 1, but safety check
         max_vals = all_windows
-    else:
+    elif all_windows.ndim == 2:
         max_vals = all_windows.max(axis=1)
+    else:
+        # For 3D: Get the max value across the whole window and all channels
+        max_vals = all_windows.max(axis=(1, 2))
         
     valid_mask = max_vals >= signal_thresh
 

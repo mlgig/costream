@@ -44,7 +44,7 @@ def create_training_data(
     event_pos: str = "fixed",
     keep_unsegmented: bool = False,
     event_exclusion_margin: float = 0.0,
-    use_post_event_data: bool = True,
+    use_post_event_data: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate (X, y) pairs. Supports MULTIPLE events per file.

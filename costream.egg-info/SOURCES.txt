@@ -8,7 +8,9 @@ costream.egg-info/requires.txt
 costream.egg-info/top_level.txt
 costream/data/__init__.py
 costream/data/loader.py
+costream/data/utils.py
 costream/evaluation/__init__.py
+costream/evaluation/cross_validation.py
 costream/evaluation/event_detection.py
 costream/evaluation/tester.py
 costream/evaluation/visualization.py
@@ -18,3 +20,7 @@ costream/model/metrics.py
 costream/segmentation/__init__.py
 costream/segmentation/streaming_segmenter.py
 costream/segmentation/training_segmenter.py
+tests/test_data.py
+tests/test_evaluation.py
+tests/test_model.py
+tests/test_segmentation.py

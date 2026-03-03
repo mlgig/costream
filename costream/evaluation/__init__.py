@@ -1,6 +1,6 @@
 from .tester import run_experiment, ModelSpec
 from .event_detection import evaluate_recording
-from .cross_validation import run_subject_cv
+from .cross_validation import run_subject_cv, aggregate_cv_results
 from .visualization import (
     plot_confidence, 
     plot_detection, 
@@ -16,6 +16,7 @@ __all__ = [
     "ModelSpec", 
     "evaluate_recording",
     "run_subject_cv",
+    "aggregate_cv_results",
     "plot_confidence",
     "plot_detection",
     "metric_box",

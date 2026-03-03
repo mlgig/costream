@@ -14,7 +14,7 @@ from ..segmentation.training_segmenter import create_training_data
 from ..data.utils import extract_streaming_data
 from .tester import run_experiment, ModelSpec
 
-__all__ = ["run_subject_cv"]
+__all__ = ["run_subject_cv", "aggregate_cv_results"]
 
 
 def run_subject_cv(

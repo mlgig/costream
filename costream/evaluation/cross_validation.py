@@ -151,3 +151,20 @@ def run_subject_cv(
     # 4. Aggregate
     final_df = pd.concat(all_results, ignore_index=True)
     return final_df
+
+def aggregate_cv_results(df: pd.DataFrame, group: str = "model",
+                         exclude_cols: list = []) -> pd.DataFrame:
+    """Return mean ± std for each metric."""
+    if exclude_cols==[]:
+        exclude_cols = ["seed", "fold"]
+    else:
+        exclude_cols = exclude_cols + ["seed", "fold"]
+    num_cols = [c for c in df.select_dtypes(include=[np.number]).columns
+                if c not in exclude_cols]
+    means = df.groupby(group)[num_cols].mean()
+    stds  = df.groupby(group)[num_cols].std()
+    aggr  = pd.DataFrame(index=means.index)
+    for col in num_cols:
+        aggr[col] = means[col].round(2).astype(str) + " ± " + stds[col].round(2).astype(str)
+    aggr.reset_index(inplace=True)
+    return aggr

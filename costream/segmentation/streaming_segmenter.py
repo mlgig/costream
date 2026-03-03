@@ -32,12 +32,7 @@ def generate_sliding_windows(
     step_samples = int(step * freq)
     window_samples = int(window_size * freq)
 
-    # Handle empty/short series 
-    if n < window_samples:
-        empty_shape = (0, window_samples) if ts.ndim == 1 else (0, window_samples, ts.shape[1])
-        return np.empty(empty_shape, dtype=ts.dtype),[], np.array([], dtype=bool), 0
-
-    # Padding
+    # 1. Padding
     pad_size = 0
     if pad:
         remainder = (n - window_samples) % step_samples
@@ -47,30 +42,34 @@ def generate_sliding_windows(
             ts = np.pad(ts, pad_width, mode='constant', constant_values=0)
             n = len(ts)
 
-    # Sliding Window View
+    # 2. Slicing (Aeon format: N, C, T)
     if ts.ndim == 1:
         all_windows = sliding_window_view(ts, window_samples)[::step_samples]
     else:
-        # Slide ONLY along the time axis (axis=0)
+        # ts is (Length, Channels). Slide along axis 0.
         all_windows = sliding_window_view(ts, window_samples, axis=0)[::step_samples]
-        # Swap axes to match standard (N_windows, Window_Length, Channels)
+        # Transpose to (n_windows, n_channels, window_samples)
         all_windows = all_windows.transpose(0, 2, 1)
-    
+
+    # 3. TRI-AXIAL ACTIVITY GATING (The Fix)
+    if signal_thresh <= 0:
+        valid_mask = np.ones(len(all_windows), dtype=bool)
+    else:
+        if ts.ndim == 1:
+            impact_zone = all_windows[:, int(freq):int(2*freq)]  # Focus on 1-2 seconds where falls often peak
+            max_vals = np.max(np.abs(impact_zone), axis=1)
+        else:
+            impact_zone = all_windows[:, :, int(freq):int(2*freq)]  # (N, Channels, Zone_Samples)
+            mag_windows = np.sqrt(np.sum(impact_zone**2, axis=1)) / 9.81  # Convert to g's
+            max_vals = np.max(mag_windows, axis=1)
+        
+        valid_mask = max_vals >= signal_thresh
+
+    # 4. Generate Indices
     n_wins = all_windows.shape[0]
     starts = np.arange(0, n_wins * step_samples, step_samples)
     ends = starts + window_samples
     indices = list(zip(starts, ends))
-
-    # 4. Vectorized Threshold Check (Now supports 3D max pooling)
-    if all_windows.ndim == 1:
-        max_vals = all_windows
-    elif all_windows.ndim == 2:
-        max_vals = all_windows.max(axis=1)
-    else:
-        # For 3D: Get the max value across the whole window and all channels
-        max_vals = all_windows.max(axis=(1, 2))
-        
-    valid_mask = max_vals >= signal_thresh
 
     return all_windows, indices, valid_mask, pad_size
 
